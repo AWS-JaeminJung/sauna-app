@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,8 +19,10 @@ from app.schemas.booking import (
 router = APIRouter(prefix="/bookings", tags=["bookings"])
 
 
-def _to_minutes(time_str: str) -> int:
-    h, m = time_str.split(":")
+def _to_minutes(time_val) -> int:
+    if isinstance(time_val, timedelta):
+        return int(time_val.total_seconds()) // 60
+    h, m = str(time_val).split(":")[:2]
     return int(h) * 60 + int(m)
 
 

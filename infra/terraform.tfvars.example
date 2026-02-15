@@ -1,0 +1,5 @@
+aws_region             = "ap-northeast-2"
+project_name           = "sauna-app"
+account_id             = "031273582910"
+aurora_master_password = "CHANGE_ME"
+jwt_secret_key         = "CHANGE_ME"

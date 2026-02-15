@@ -22,5 +22,9 @@ dist/
 .DS_Store
 Thumbs.db
 
+# Lambda build artifacts
+backend/package/
+backend/lambda.zip
+
 # Claude
 .claude/

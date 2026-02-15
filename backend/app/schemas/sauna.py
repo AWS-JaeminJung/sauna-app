@@ -1,4 +1,7 @@
-from pydantic import BaseModel
+from datetime import timedelta
+from typing import Any
+
+from pydantic import BaseModel, field_validator
 
 
 class SaunaCreate(BaseModel):
@@ -35,3 +38,18 @@ class SaunaResponse(BaseModel):
     is_active: bool
     open_time: str
     close_time: str
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_id(cls, v: Any) -> str:
+        return str(v)
+
+    @field_validator("open_time", "close_time", mode="before")
+    @classmethod
+    def coerce_time(cls, v: Any) -> str:
+        if isinstance(v, timedelta):
+            total_seconds = int(v.total_seconds())
+            hours = total_seconds // 3600
+            minutes = (total_seconds % 3600) // 60
+            return f"{hours:02d}:{minutes:02d}"
+        return str(v)

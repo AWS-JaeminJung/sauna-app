@@ -1,4 +1,6 @@
-from pydantic import BaseModel, EmailStr
+from typing import Any
+
+from pydantic import BaseModel, field_validator
 
 
 class LoginRequest(BaseModel):
@@ -24,3 +26,8 @@ class UserResponse(BaseModel):
     full_name: str
     phone: str | None
     is_admin: bool
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_id(cls, v: Any) -> str:
+        return str(v)

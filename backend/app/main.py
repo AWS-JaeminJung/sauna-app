@@ -32,3 +32,11 @@ app.include_router(api_router)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Lambda handler via Mangum
+try:
+    from mangum import Mangum
+    handler = Mangum(app, lifespan="auto")
+except ImportError:
+    pass
