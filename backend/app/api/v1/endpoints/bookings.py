@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, require_admin, require_user
 from app.core.database import get_db
 from app.models.booking import Booking
+from app.models.review import Review
 from app.models.sauna import Sauna
 from app.models.user import User
 from app.schemas.booking import (
@@ -66,6 +67,62 @@ async def get_availability(
         current += 60  # 1-hour slots
 
     return slots
+
+
+@router.get("/my")
+async def list_my_bookings(
+    status: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """
+    Get all bookings for the logged-in user.
+    - User must be authenticated
+    - Results are sorted by booking date (newest first)
+    - Optional status filter (confirmed, completed, cancelled)
+    """
+    query = select(Booking).where(Booking.user_id == user.id)
+    if status:
+        query = query.where(Booking.status == status)
+    query = query.order_by(Booking.booking_date.desc(), Booking.start_time.desc())
+    result = await db.execute(query)
+    bookings = result.scalars().all()
+
+    # Fetch sauna names
+    sauna_ids = {b.sauna_id for b in bookings}
+    sauna_map = {}
+    if sauna_ids:
+        r = await db.execute(select(Sauna).where(Sauna.id.in_(sauna_ids)))
+        sauna_map = {s.id: s.name for s in r.scalars().all()}
+
+    # Check which bookings have reviews
+    booking_ids = [b.id for b in bookings]
+    review_map = {}
+    if booking_ids:
+        r = await db.execute(
+            select(Review.booking_id).where(Review.booking_id.in_(booking_ids))
+        )
+        review_map = {booking_id for (booking_id,) in r.all()}
+
+    return [
+        BookingResponse(
+            id=b.id,
+            sauna_id=b.sauna_id,
+            booking_date=b.booking_date,
+            start_time=b.start_time,
+            end_time=b.end_time,
+            guest_count=b.guest_count,
+            total_price=b.total_price,
+            customer_name=b.customer_name,
+            customer_phone=b.customer_phone,
+            customer_email=b.customer_email,
+            notes=b.notes,
+            status=b.status,
+            sauna_name=sauna_map.get(b.sauna_id),
+            has_review=b.id in review_map,
+        )
+        for b in bookings
+    ]
 
 
 @router.post("", response_model=BookingResponse)
@@ -138,6 +195,7 @@ async def create_booking(
         notes=booking.notes,
         status=booking.status,
         sauna_name=sauna.name,
+        has_review=False,
     )
 
 
@@ -167,6 +225,15 @@ async def list_bookings(
         r = await db.execute(select(Sauna).where(Sauna.id.in_(sauna_ids)))
         sauna_map = {s.id: s.name for s in r.scalars().all()}
 
+    # Check which bookings have reviews
+    booking_ids = [b.id for b in bookings]
+    review_map = {}
+    if booking_ids:
+        r = await db.execute(
+            select(Review.booking_id).where(Review.booking_id.in_(booking_ids))
+        )
+        review_map = {booking_id for (booking_id,) in r.all()}
+
     return [
         BookingResponse(
             id=b.id,
@@ -182,6 +249,7 @@ async def list_bookings(
             notes=b.notes,
             status=b.status,
             sauna_name=sauna_map.get(b.sauna_id),
+            has_review=b.id in review_map,
         )
         for b in bookings
     ]
@@ -195,6 +263,13 @@ async def get_booking(booking_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Booking not found")
     sauna_result = await db.execute(select(Sauna).where(Sauna.id == booking.sauna_id))
     sauna = sauna_result.scalar_one_or_none()
+
+    # Check if booking has a review
+    review_result = await db.execute(
+        select(Review).where(Review.booking_id == booking.id)
+    )
+    has_review = review_result.scalar_one_or_none() is not None
+
     return BookingResponse(
         id=booking.id,
         sauna_id=booking.sauna_id,
@@ -209,6 +284,71 @@ async def get_booking(booking_id: str, db: AsyncSession = Depends(get_db)):
         notes=booking.notes,
         status=booking.status,
         sauna_name=sauna.name if sauna else None,
+        has_review=has_review,
+    )
+
+
+@router.patch("/{booking_id}/cancel", response_model=BookingResponse)
+async def cancel_booking(
+    booking_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_user),
+):
+    """
+    Cancel a booking.
+    - User must be authenticated
+    - User can only cancel their own bookings
+    - Cannot cancel already cancelled bookings
+    """
+    result = await db.execute(select(Booking).where(Booking.id == booking_id))
+    booking = result.scalar_one_or_none()
+
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="예약을 찾을 수 없습니다.",
+        )
+
+    if booking.user_id != user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="본인의 예약만 취소할 수 있습니다.",
+        )
+
+    if booking.status == "cancelled":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="이미 취소된 예약입니다.",
+        )
+
+    booking.status = "cancelled"
+    await db.commit()
+    await db.refresh(booking)
+
+    sauna_result = await db.execute(select(Sauna).where(Sauna.id == booking.sauna_id))
+    sauna = sauna_result.scalar_one_or_none()
+
+    # Check if booking has a review
+    review_result = await db.execute(
+        select(Review).where(Review.booking_id == booking.id)
+    )
+    has_review = review_result.scalar_one_or_none() is not None
+
+    return BookingResponse(
+        id=booking.id,
+        sauna_id=booking.sauna_id,
+        booking_date=booking.booking_date,
+        start_time=booking.start_time,
+        end_time=booking.end_time,
+        guest_count=booking.guest_count,
+        total_price=booking.total_price,
+        customer_name=booking.customer_name,
+        customer_phone=booking.customer_phone,
+        customer_email=booking.customer_email,
+        notes=booking.notes,
+        status=booking.status,
+        sauna_name=sauna.name if sauna else None,
+        has_review=has_review,
     )
 
 
@@ -229,6 +369,13 @@ async def update_booking(
     await db.refresh(booking)
     sauna_result = await db.execute(select(Sauna).where(Sauna.id == booking.sauna_id))
     sauna = sauna_result.scalar_one_or_none()
+
+    # Check if booking has a review
+    review_result = await db.execute(
+        select(Review).where(Review.booking_id == booking.id)
+    )
+    has_review = review_result.scalar_one_or_none() is not None
+
     return BookingResponse(
         id=booking.id,
         sauna_id=booking.sauna_id,
@@ -243,4 +390,5 @@ async def update_booking(
         notes=booking.notes,
         status=booking.status,
         sauna_name=sauna.name if sauna else None,
+        has_review=has_review,
     )

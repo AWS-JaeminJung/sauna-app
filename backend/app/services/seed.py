@@ -3,6 +3,8 @@ from sqlalchemy import select
 from app.core.database import async_session
 from app.core.security import get_password_hash
 from app.models.sauna import Sauna
+from app.models.sauna_image import SaunaImage
+from app.models.operating_hours import OperatingHours
 from app.models.user import User
 
 
@@ -23,7 +25,7 @@ async def seed_data():
         )
         db.add(admin)
 
-        # Create sample saunas
+        # Create sample saunas with enhanced location data (용인시 양지면 근처)
         saunas = [
             Sauna(
                 name="Traditional Finnish Sauna",
@@ -34,6 +36,14 @@ async def seed_data():
                 amenities='["Shower", "Towels", "Birch Whisks", "Changing Room", "Rest Area"]',
                 open_time="10:00",
                 close_time="22:00",
+                address="경기도 용인시 양지면 양지중로 123",
+                road_address="경기도 용인시 양지면 봉양로 45",
+                latitude=37.2401,
+                longitude=127.0742,
+                phone="031-234-5678",
+                sauna_type="traditional",
+                temperature_min=80,
+                temperature_max=100,
             ),
             Sauna(
                 name="Smoke Sauna (Savusauna)",
@@ -44,6 +54,14 @@ async def seed_data():
                 amenities='["Shower", "Towels", "Lake Access", "Changing Room", "Rest Area", "Refreshments"]',
                 open_time="14:00",
                 close_time="22:00",
+                address="경기도 용인시 양지면 양지남로 456",
+                road_address="경기도 용인시 양지면 봉양로 100",
+                latitude=37.2425,
+                longitude=127.0765,
+                phone="031-234-5679",
+                sauna_type="smoke",
+                temperature_min=70,
+                temperature_max=95,
             ),
             Sauna(
                 name="Steam Room (Höyrysauna)",
@@ -54,6 +72,14 @@ async def seed_data():
                 amenities='["Shower", "Towels", "Aromatherapy", "Changing Room"]',
                 open_time="10:00",
                 close_time="21:00",
+                address="경기도 용인시 양지면 양지동로 789",
+                road_address="경기도 용인시 양지면 봉양로 200",
+                latitude=37.2380,
+                longitude=127.0720,
+                phone="031-234-5680",
+                sauna_type="steam",
+                temperature_min=40,
+                temperature_max=50,
             ),
             Sauna(
                 name="Infrared Sauna",
@@ -64,10 +90,72 @@ async def seed_data():
                 amenities='["Shower", "Towels", "Music System", "Changing Room"]',
                 open_time="09:00",
                 close_time="22:00",
+                address="경기도 용인시 양지면 양지서로 321",
+                road_address="경기도 용인시 양지면 봉양로 300",
+                latitude=37.2410,
+                longitude=127.0780,
+                phone="031-234-5681",
+                sauna_type="infrared",
+                temperature_min=45,
+                temperature_max=60,
             ),
         ]
 
-        for sauna in saunas:
+        # Add saunas and their associated images and operating hours
+        for idx, sauna in enumerate(saunas):
             db.add(sauna)
+            await db.flush()  # Flush to generate IDs
+
+            # Add sample images for each sauna (2-3 images each)
+            images = [
+                SaunaImage(
+                    sauna_id=sauna.id,
+                    image_url=f"/images/sauna_{idx}_main.jpg",
+                    display_order=0,
+                    is_primary=True,
+                ),
+                SaunaImage(
+                    sauna_id=sauna.id,
+                    image_url=f"/images/sauna_{idx}_interior.jpg",
+                    display_order=1,
+                    is_primary=False,
+                ),
+                SaunaImage(
+                    sauna_id=sauna.id,
+                    image_url=f"/images/sauna_{idx}_relaxation.jpg",
+                    display_order=2,
+                    is_primary=False,
+                ),
+            ]
+
+            for img in images:
+                db.add(img)
+
+            # Add operating hours for each sauna (매일 다른 시간, 월요일 휴무 예시)
+            hours_data = [
+                (0, True, None, None),  # Monday - closed
+                (1, False, "10:00", "23:00"),  # Tuesday
+                (2, False, "10:00", "23:00"),  # Wednesday
+                (3, False, "10:00", "23:00"),  # Thursday
+                (4, False, "09:00", "24:00"),  # Friday
+                (5, False, "09:00", "24:00"),  # Saturday
+                (6, False, "10:00", "22:00"),  # Sunday
+            ]
+
+            for day_of_week, is_closed, open_time, close_time in hours_data:
+                # Use sauna's default open/close time if not specified
+                if open_time is None:
+                    open_time = sauna.open_time
+                if close_time is None:
+                    close_time = sauna.close_time
+
+                operating_hour = OperatingHours(
+                    sauna_id=sauna.id,
+                    day_of_week=day_of_week,
+                    open_time=open_time,
+                    close_time=close_time,
+                    is_closed=is_closed,
+                )
+                db.add(operating_hour)
 
         await db.commit()

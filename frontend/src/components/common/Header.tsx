@@ -19,17 +19,22 @@ export default function Header() {
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-6">
             <Link to="/" className="hover:text-orange-300 transition">
-              Home
+              홈
             </Link>
             <Link to="/booking" className="hover:text-orange-300 transition">
-              Book Now
+              예약하기
             </Link>
+            {user && (
+              <Link to="/my-bookings" className="hover:text-orange-300 transition">
+                내 예약
+              </Link>
+            )}
             {isAdmin && (
               <Link
                 to="/admin"
                 className="hover:text-orange-300 transition"
               >
-                Admin
+                관리자
               </Link>
             )}
             {user ? (
@@ -37,14 +42,14 @@ export default function Header() {
                 onClick={logout}
                 className="bg-stone-700 hover:bg-stone-600 px-4 py-2 rounded-lg transition"
               >
-                Logout
+                로그아웃
               </button>
             ) : (
               <Link
                 to="/login"
                 className="bg-orange-500 hover:bg-orange-600 px-4 py-2 rounded-lg transition"
               >
-                Login
+                로그인
               </Link>
             )}
           </nav>
@@ -66,22 +71,31 @@ export default function Header() {
               className="block py-2 hover:text-orange-300"
               onClick={() => setMenuOpen(false)}
             >
-              Home
+              홈
             </Link>
             <Link
               to="/booking"
               className="block py-2 hover:text-orange-300"
               onClick={() => setMenuOpen(false)}
             >
-              Book Now
+              예약하기
             </Link>
+            {user && (
+              <Link
+                to="/my-bookings"
+                className="block py-2 hover:text-orange-300"
+                onClick={() => setMenuOpen(false)}
+              >
+                내 예약
+              </Link>
+            )}
             {isAdmin && (
               <Link
                 to="/admin"
                 className="block py-2 hover:text-orange-300"
                 onClick={() => setMenuOpen(false)}
               >
-                Admin
+                관리자
               </Link>
             )}
             {user ? (
@@ -92,7 +106,7 @@ export default function Header() {
                 }}
                 className="block py-2 text-orange-300"
               >
-                Logout
+                로그아웃
               </button>
             ) : (
               <Link
@@ -100,7 +114,7 @@ export default function Header() {
                 className="block py-2 text-orange-300"
                 onClick={() => setMenuOpen(false)}
               >
-                Login
+                로그인
               </Link>
             )}
           </nav>

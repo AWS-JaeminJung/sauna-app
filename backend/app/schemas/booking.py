@@ -35,6 +35,7 @@ class BookingResponse(BaseModel):
     notes: str | None
     status: str
     sauna_name: str | None = None
+    has_review: bool = False
 
     @field_validator("id", "sauna_id", mode="before")
     @classmethod
